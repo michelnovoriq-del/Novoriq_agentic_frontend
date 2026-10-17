@@ -59,6 +59,13 @@ export type AccountBootstrap = {
   };
 };
 
+export type ClientWorkspace = {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+};
+
 export type UploadedFile = {
   id: string;
   organization_id: string;
@@ -364,6 +371,14 @@ export const api = {
 
   verifyEmail: (payload: { token: string }) =>
     request<{ status: string }>("/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  listWorkspaces: () => request<ClientWorkspace[]>("/client-workspaces"),
+
+  createWorkspace: (payload: { name: string; description?: string }) =>
+    request<ClientWorkspace>("/client-workspaces", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

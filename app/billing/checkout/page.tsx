@@ -3,7 +3,7 @@
 import Script from "next/script";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { PublicHeader } from "@/components/layout/public-header";
 import { PublicFooter } from "@/components/layout/public-footer";
 
@@ -20,6 +20,24 @@ function isPaidPlan(value: string | null): value is PaidPlan {
 }
 
 export default function BillingCheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-cream text-ink">
+          <PublicHeader />
+          <main className="mx-auto max-w-2xl px-5 py-14 sm:px-8">
+            <p role="status">Loading checkout…</p>
+          </main>
+          <PublicFooter />
+        </div>
+      }
+    >
+      <BillingCheckoutContent />
+    </Suspense>
+  );
+}
+
+function BillingCheckoutContent() {
   const params = useSearchParams();
   const plan = params.get("plan");
   const email = params.get("email") ?? "";
