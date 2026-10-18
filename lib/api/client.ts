@@ -465,6 +465,12 @@ export const api = {
       method: "POST",
     }),
 
+  createWhopCheckout: (planCode: "professional" | "firm" | "enterprise") =>
+    request<{ purchase_url: string }>("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan_code: planCode }),
+    }),
+
   deleteFile: (fileId: string) =>
     request<void>(`/files/${fileId}`, { method: "DELETE" }),
 

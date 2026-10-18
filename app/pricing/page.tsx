@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, ExternalLink, Loader2, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -13,12 +13,6 @@ import { PublicFooter } from "@/components/layout/public-footer";
 import { PublicHeader } from "@/components/layout/public-header";
 
 const supportEmail = "michelnovoriq@gmail.com";
-
-const whopPlanIds = {
-  professional: process.env.NEXT_PUBLIC_WHOP_PROFESSIONAL_PLAN_ID ?? "",
-  firm: process.env.NEXT_PUBLIC_WHOP_FIRM_PLAN_ID ?? "",
-  enterprise: process.env.NEXT_PUBLIC_WHOP_ENTERPRISE_PLAN_ID ?? "",
-};
 
 const plans = [
   {
@@ -98,8 +92,6 @@ const plans = [
   },
 ] as const;
 
-type PaidPlanCode = "professional" | "firm" | "enterprise";
-
 export default function PricingPage() {
   const { user, account, isAuthenticated, refreshAccount } = useAuth();
   const [intendedPlan, setIntendedPlan] = useState<string | null>(null);
@@ -116,11 +108,6 @@ export default function PricingPage() {
     onSuccess: async (status) => { await billingStatus.refetch(); await refreshAccount(); return status; },
   });
 
-  const selectedPlanId = useMemo(() => {
-    if (!selectedPlan || selectedPlan.code === "free") return "";
-    return whopPlanIds[selectedPlan.code as PaidPlanCode];
-  }, [selectedPlan]);
-
   function beginUpgrade(plan: (typeof plans)[number]) {
     if (plan.code === "free") return;
     setConfirmedEmail(false);
@@ -128,8 +115,8 @@ export default function PricingPage() {
   }
 
   function continueToWhop() {
-    if (!confirmedEmail || !selectedPlanId || !selectedPlan || !user?.email) return;
-    window.location.assign(`/billing/checkout?plan=${selectedPlan.code}&email=${encodeURIComponent(user.email)}`);
+    if (!confirmedEmail || !selectedPlan || !user?.email) return;
+    window.location.assign(`/billing/checkout?plan=${selectedPlan.code}`);
   }
 
   return (
@@ -174,8 +161,6 @@ export default function PricingPage() {
           <div className="mt-8 grid gap-4 lg:grid-cols-4">
             {plans.map((plan) => {
               const isFree = plan.code === "free";
-              const planId = !isFree ? whopPlanIds[plan.code as PaidPlanCode] : "";
-              const unavailable = !isFree && !planId;
               const currentCode = account?.subscription.plan_code ?? billingStatus.data?.plan_code;
               const isCurrent = currentCode === plan.code;
               const isPaid = currentCode === "professional" || currentCode === "firm" || currentCode === "enterprise";
@@ -213,15 +198,10 @@ export default function PricingPage() {
                       <Button className="mt-6 w-full" variant="outline" disabled>Current plan</Button>
                     ) : isAuthenticated ? (
                       <>
-                        <Button className="mt-6 w-full" variant="sky" onClick={() => beginUpgrade(plan)} disabled={unavailable}>
+                        <Button className="mt-6 w-full" variant="sky" onClick={() => beginUpgrade(plan)}>
                           Upgrade with Whop
                           <ExternalLink className="h-4 w-4" />
                         </Button>
-                        {unavailable ? (
-                          <p className="mt-3 text-xs font-semibold text-[#EF4444]">
-                            Checkout is temporarily unavailable. Contact Novoriq support.
-                          </p>
-                        ) : null}
                       </>
                     ) : (
                       <Button asChild className="mt-6 w-full" variant="sky">
@@ -269,7 +249,7 @@ export default function PricingPage() {
               <span>I will use this same email address during Whop checkout.</span>
             </label>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <Button variant="sky" className="flex-1" disabled={!confirmedEmail || !selectedPlanId} onClick={continueToWhop}>
+              <Button variant="sky" className="flex-1" disabled={!confirmedEmail || !user?.email} onClick={continueToWhop}>
                 <ShieldCheck className="h-4 w-4" />
                 Continue to Whop
               </Button>

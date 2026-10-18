@@ -24,7 +24,7 @@ export default function BillingReturnPage() {
     setError(null);
 
     try {
-      const next = await api.getBillingStatus();
+      const next = await api.syncWhopAccess();
       setStatus(next);
       setAttempts((n) => n + 1);
 
