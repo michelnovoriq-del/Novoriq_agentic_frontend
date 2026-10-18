@@ -1,22 +1,22 @@
 "use client";
 
-import Script from "next/script";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Loader2, ExternalLink } from "lucide-react";
+import { api } from "@/lib/api/client";
+import { Button } from "@/components/ui/button";
 import { PublicHeader } from "@/components/layout/public-header";
 import { PublicFooter } from "@/components/layout/public-footer";
 
-const planIds = {
-  professional: process.env.NEXT_PUBLIC_WHOP_PROFESSIONAL_PLAN_ID ?? "",
-  firm: process.env.NEXT_PUBLIC_WHOP_FIRM_PLAN_ID ?? "",
-  enterprise: process.env.NEXT_PUBLIC_WHOP_ENTERPRISE_PLAN_ID ?? "",
-} as const;
-
-type PaidPlan = keyof typeof planIds;
+type PaidPlan = "professional" | "firm" | "enterprise";
 
 function isPaidPlan(value: string | null): value is PaidPlan {
-  return value === "professional" || value === "firm" || value === "enterprise";
+  return (
+    value === "professional" ||
+    value === "firm" ||
+    value === "enterprise"
+  );
 }
 
 export default function BillingCheckoutPage() {
@@ -26,7 +26,7 @@ export default function BillingCheckoutPage() {
         <div className="min-h-screen bg-cream text-ink">
           <PublicHeader />
           <main className="mx-auto max-w-2xl px-5 py-14 sm:px-8">
-            <p role="status">Loading checkout…</p>
+            <p role="status">Preparing secure checkout…</p>
           </main>
           <PublicFooter />
         </div>
@@ -39,43 +39,123 @@ export default function BillingCheckoutPage() {
 
 function BillingCheckoutContent() {
   const params = useSearchParams();
-  const plan = params.get("plan");
-  const email = params.get("email") ?? "";
-  const planId = isPaidPlan(plan) ? planIds[plan] : "";
+  const requestedPlan = params.get("plan");
+  const plan = isPaidPlan(requestedPlan) ? requestedPlan : null;
 
-  // Whop's loader discovers the checkout element. Recreate the element only
-  // from our fixed plan allow-list; query parameters never select arbitrary IDs.
-  const checkout = useMemo(() => ({ planId, email }), [planId, email]);
-  useEffect(() => {
-    if (typeof window !== "undefined" && planId) {
-      window.dispatchEvent(new Event("whop-checkout-ready"));
+  const started = useRef(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const startCheckout = useCallback(async () => {
+    if (!plan) {
+      setError("Select a valid paid plan from the pricing page.");
+      return;
     }
-  }, [planId]);
+
+    started.current = true;
+    setLoading(true);
+    setError("");
+
+    try {
+      const { purchase_url } = await api.createWhopCheckout(plan);
+
+      let checkoutUrl: URL;
+
+      try {
+        checkoutUrl = new URL(purchase_url);
+      } catch {
+        throw new Error("Whop returned an invalid checkout link.");
+      }
+
+      const hostname = checkoutUrl.hostname.toLowerCase();
+      const isWhopHost =
+        hostname === "whop.com" || hostname.endsWith(".whop.com");
+
+      if (checkoutUrl.protocol !== "https:" || !isWhopHost) {
+        throw new Error("Whop returned an invalid checkout link.");
+      }
+
+      window.location.assign(checkoutUrl.toString());
+    } catch (err) {
+      started.current = false;
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to start checkout. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [plan]);
+
+  useEffect(() => {
+    if (!plan) {
+      setError("Select a valid paid plan from the pricing page.");
+      return;
+    }
+
+    if (!started.current) {
+      void startCheckout();
+    }
+  }, [plan, startCheckout]);
 
   return (
     <div className="min-h-screen bg-cream text-ink">
       <PublicHeader />
+
       <main className="mx-auto max-w-2xl px-5 py-14 sm:px-8">
-        <p className="text-sm font-black uppercase tracking-[.18em] text-deepblue">Secure checkout</p>
-        <h1 className="mt-3 text-4xl font-black">Complete your Novoriq upgrade</h1>
-        {!checkout.planId ? (
-          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
-            This plan is not ready for checkout. Return to pricing or contact support.
-            <p className="mt-4"><Link className="font-bold underline" href="/pricing">Back to pricing</Link></p>
+        <p className="text-sm font-black uppercase tracking-[.18em] text-deepblue">
+          Secure checkout
+        </p>
+
+        <h1 className="mt-3 text-4xl font-black">
+          Redirecting to Whop
+        </h1>
+
+        <p className="mt-4 text-slate-600">
+          Your payment will be processed securely by Whop. After payment,
+          you will return to Novoriq to check your subscription status.
+        </p>
+
+        {error ? (
+          <div
+            role="alert"
+            className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800"
+          >
+            <p>{error}</p>
+
+            <Button
+              className="mt-4"
+              variant="sky"
+              disabled={loading || !plan}
+              onClick={() => void startCheckout()}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ExternalLink className="h-4 w-4" />
+              )}
+              Try checkout again
+            </Button>
           </div>
         ) : (
-          <>
-            <p className="mt-4 text-slate-600">Payment is securely processed by Whop. We pre-filled your Novoriq account email so the membership can be linked automatically.</p>
-            <Script src="https://js.whop.com/static/checkout/loader.js" strategy="afterInteractive" />
-            <div
-              className="mt-8 min-h-64 rounded-2xl bg-white p-2 shadow-soft"
-              data-whop-checkout-plan-id={checkout.planId}
-              data-whop-checkout-prefill-email={checkout.email}
-            />
-            <p className="mt-5 text-sm text-slate-600">After payment, return to <Link className="font-bold text-deepblue underline" href="/billing/return">billing status</Link>. Access activates after Whop confirms your membership.</p>
-          </>
+          <div
+            role="status"
+            className="mt-6 flex items-center gap-3 rounded-xl bg-white p-5 shadow-soft"
+          >
+            <Loader2 className="h-5 w-5 animate-spin text-deepblue" />
+            <span>Preparing your secure Whop checkout…</span>
+          </div>
         )}
+
+        <p className="mt-6 text-sm text-slate-600">
+          Need to choose another plan?{" "}
+          <Link className="font-bold text-deepblue underline" href="/pricing">
+            Back to pricing
+          </Link>
+        </p>
       </main>
+
       <PublicFooter />
     </div>
   );
